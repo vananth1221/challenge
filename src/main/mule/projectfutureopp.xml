@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="67073e1a-5ae1-43df-83ba-237dcf500e27" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<flow name="projectfutureoppFlow_module" doc:id="b63fd5dd-1333-4b4c-8e1d-81b1ce6da1d1" >
+		<http:listener doc:name="Listener" doc:id="844ae8ff-a383-4461-8b65-f36e929b43a3" path="/api/*" config-ref="HTTP_Listener_config"/>
+		<ee:transform doc:name="Transform Message" doc:id="249a791b-b308-476f-a5a3-8ce50239996e" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+import modules ::functionmodulefile
+output application/json
+
+---
+childrensToParents: :main({
+    parent: parentItem.parent,
+    name: parentItem.name,
+    children: getChildren(items, parentItem)
+})]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>

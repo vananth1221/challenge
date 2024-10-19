@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd">
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="fca0aecd-dc86-4e92-87f6-7436253138c6" >
+		<http:request-connection host="futureopp" />
+	</http:request-config>
+	<flow name="file2Flow_metadatachallenge" doc:id="4b47e9a0-2130-4f22-b96a-589a751f69df" doc:description="this flow gets between 0 and 10 request per minute.">
+		<http:listener doc:name="Listener" doc:id="7eb00d8e-7dbe-4547-86a5-b6f4f4dd3bf7" config-ref="HTTP_Listener_config" path="/api/*"/>
+		<logger level="INFO" doc:name="Logger" doc:id="12c7bc8e-c858-49e3-915b-0c3a4b9531fc" />
+		<ee:transform doc:name="Transform Message" doc:id="8af1faee-99fc-4a42-91b2-00bc3696721c" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="file2Flow1" doc:id="93688579-2097-4887-9e42-2f2c4248acc7" >
+		<scheduler doc:name="Scheduler" doc:id="71b5ff0d-2ee7-4b0f-ac0e-de05efbd44af" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="10" timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</scheduler>
+		<flow-ref doc:name="Flow Reference" doc:id="565b023e-3cde-4cc6-8e76-8e0bc5a99de8" name="file2Flow2"/>
+	</flow>
+	<flow name="file2Flow2" doc:id="92707418-2e96-44db-ab56-a74c580c4a4c" >
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="a1659e9d-11a4-4e54-98cb-a8c6fb6350b3" >
+				<logger level="INFO" doc:name="Logger" doc:id="a39d852d-d5a1-4945-ad4b-ffe2f7c887f6" message="#[payload]"/>
+			</on-error-propagate>
+		</error-handler>
+		<sub-flow name="ourhouse-data-snapshot-implementation" doc:id="d6e4d6d7-b61c-4e96-a26a-0f0919701032" >
+		<set-variable value='#[now() &gt;&gt; "UTC"]' doc:name="Set current time" doc:id="830d672e-963e-4e23-b875-b6c1819e1c69" variableName="currentTime" />
+		<logger level="INFO" doc:name="Logger" doc:id="538bfdc3-5d92-4e29-9441-cb2ae8d545a6" message="scheduler processing has started... #[vars.currentTime]" category="com.ql.info.logging" />
+		<ee:transform doc:name="Transform Message" doc:id="cd9fc070-736b-4484-94c8-369d7d03bf42">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="timeObj"><![CDATA[%dw 2.0
+output application/java
+
+var time10MinDelay = vars.currentTime-"PT10m"
+
+---
+{
+    startDateTime: if(time10MinDelay.minutes >= 10) (time10MinDelay as String {format: "yyyy-MM-dd'T'HH:10:00'Z'"}) else (time10MinDelay as String {format: "yyyy-MM-dd'T'HH:00:00'Z'"}),
+    endDateTime: if(time10MinDelay.minutes >= 10) (time10MinDelay as String {format: "yyyy-MM-dd'T'HH:59:59'Z'"}) else (time10MinDelay as String {format: "yyyy-MM-dd'T'HH:29:59'Z'"})
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+			<salesforce:query doc:name="Query" doc:id="6e77eaac-6712-4203-a11e-525e36d5969d" />
+			<ee:transform doc:name="Transform Message" doc:id="b8b8f76d-dc22-4f5e-897e-6aa781b4a0fc">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+payload map((item, index) -> {
+	soqlquery: "SELECT " ++ item.FieldsToQuery__c ++ " FROM " ++ item.ObjectName__c ++ " WHERE " ++ item.FilterDateTimeField__c ++ ">=" ++ vars.timeObj.startDateTime ++ " AND " ++ item.FilterDateTimeField__c ++ "<=" ++ vars.timeObj.endDateTime]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			<foreach doc:name="For Each" doc:id="a898a14c-63c4-4b17-9ec5-575d7fac4730" >
+				<ee:transform doc:name="Transform Message" doc:id="4d5ce7ea-66fa-4ce9-b46b-fd9c648e25b4">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			</foreach>
+			<http:request method="GET" doc:name="Request" doc:id="5bdd2c9e-f311-4c54-b97a-060ba8c65e79" />
+		</sub-flow>
+	</flow>
+</mule>
